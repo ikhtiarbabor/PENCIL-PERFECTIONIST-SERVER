@@ -10,21 +10,31 @@ require('dotenv').config();
 app.use(cors());
 app.use(express.json());
 const verifyJwt = (req, res, next) => {
-    const authorization = req.headers.authorization;
-    !authorization &&
-      res.status(401).send({ error: true, message: 'unauthorized user' });
-    const token = authorization.split(' ')[1];
-    jwt.verify(token, process.env.JWT_ACCESS_TOKEN, (err, decoded) => {
-      if (err) {
-        return res
-          .status(403)
-          .send({ error: true, message: 'unauthorized user' });
-      } else {
-        req.decoded = decoded;
-        next();
-      }
-    });
-  };  
+  const authorization = req.headers.authorization;
+  !authorization &&
+    res.status(401).send({ error: true, message: 'unauthorized user' });
+  const token = authorization.split(' ')[1];
+  jwt.verify(token, process.env.JWT_ACCESS_TOKEN, (err, decoded) => {
+    if (err) {
+      return res
+        .status(403)
+        .send({ error: true, message: 'unauthorized user' });
+    } else {
+      req.decoded = decoded;
+      next();
+    }
+  });
+};
+const verifyAdmin = async (req, res, next) => {
+  const email = req.decoded.email;
+  const user = await userCollection.findOne({ email: email });
+  if (user?.role !== 'admin') {
+    return res.status(403).send({ error: true, message: 'unauthorized user' });
+  } else {
+    next();
+  }
+};
+
 
 // Mongodb
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.1yvmtut.mongodb.net/?retryWrites=true&w=majority`;
@@ -49,23 +59,23 @@ async function run() {
       res.send(result);
     });
     app.get('/users, async', async (req, res) => {
-        const result = await userCollection.find().toArray();
-        res.send(result);
-      });
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
     /* userCollection end*/
-     /* Jwt start */
-     app.post('/jwt', (req, res) => {
-        const query = req.body;
-        const token = jwt.sign(
-          {
-            query,
-          },
-          process.env.JWT_ACCESS_TOKEN,
-          { expiresIn: '1h' }
-        );
-        res.send(token);
-      });
-      /* Jwt end */
+    /* Jwt start */
+    app.post('/jwt', (req, res) => {
+      const query = req.body;
+      const token = jwt.sign(
+        {
+          query,
+        },
+        process.env.JWT_ACCESS_TOKEN,
+        { expiresIn: '1h' }
+      );
+      res.send(token);
+    });
+    /* Jwt end */
 
     await client.db('admin').command({ ping: 1 });
     console.log(
