@@ -37,6 +37,19 @@ async function run() {
         res.send(result);
       });
     /* userCollection end*/
+     /* Jwt start */
+     app.post('/jwt', (req, res) => {
+        const query = req.body;
+        const token = jwt.sign(
+          {
+            query,
+          },
+          process.env.JWT_ACCESS_TOKEN,
+          { expiresIn: '1h' }
+        );
+        res.send(token);
+      });
+      /* Jwt end */
 
     await client.db('admin').command({ ping: 1 });
     console.log(
