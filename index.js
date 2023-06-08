@@ -3,7 +3,7 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 5000;
 const jwt = require('jsonwebtoken');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 
 // middleware
@@ -54,7 +54,7 @@ async function run() {
       res.send({ token });
     });
     const verifyAdmin = async (req, res, next) => {
-      const email = req.decoded.query.email;
+      const email = req?.decoded?.query?.email;
       const user = await userCollection.findOne({ email: email });
       if (user?.role !== 'admin') {
         return res
@@ -97,17 +97,37 @@ async function run() {
         return;
       }
       const countUser = await userCollection.countDocuments();
-  
+
       req.body.count = countUser + 1;
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
+    app.patch(
+      '/users/adminUpdate/:id',
+      verifyJwt,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        console.log(id);
+        const role = req.body.role;
+        console.log(role);
+        const query = { _id: new ObjectId(id) };
+        const updateRole = {
+          $set: {
+            role: role,
+          },
+        };
+        const result = await userCollection.updateOne(query, updateRole);
+        res.send(result);
+      }
+    );
     app.get('/users', verifyJwt, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
     app.get('/users/user/:email', async (req, res) => {
       const email = req.params.email;
+
       const result = await userCollection.findOne({ email: email });
       if (result?.role === 'admin') {
         return res.send('admin');
