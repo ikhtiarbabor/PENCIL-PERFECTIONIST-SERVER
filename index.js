@@ -25,24 +25,6 @@ const verifyJwt = (req, res, next) => {
     }
   });
 };
-const verifyAdmin = async (req, res, next) => {
-  const email = req.decoded.email;
-  const user = await userCollection.findOne({ email: email });
-  if (user?.role !== 'admin') {
-    return res.status(403).send({ error: true, message: 'unauthorized user' });
-  } else {
-    next();
-  }
-};
-const verifyInstructor = async (req, res, next) => {
-    const email = req.decoded.email;
-    const user = await userCollection.findOne({ email: email });
-    if (user?.role !== 'instructor') {
-      return res.status(403).send({ error: true, message: 'unauthorized user' });
-    } else {
-      next();
-    }
-  };
 
 // Mongodb
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.1yvmtut.mongodb.net/?retryWrites=true&w=majority`;
@@ -59,18 +41,6 @@ async function run() {
     const userCollection = client
       .db('pencilPerfectionistDB')
       .collection('users');
-
-    /* userCollection start*/
-    app.post('/users', async (req, res) => {
-      const user = req.body;
-      const result = await userCollection.insertOne(user);
-      res.send(result);
-    });
-    app.get('/users, async', async (req, res) => {
-      const result = await userCollection.find().toArray();
-      res.send(result);
-    });
-    /* userCollection end*/
     /* Jwt start */
     app.post('/jwt', (req, res) => {
       const query = req.body;
@@ -81,9 +51,74 @@ async function run() {
         process.env.JWT_ACCESS_TOKEN,
         { expiresIn: '1h' }
       );
-      res.send(token);
+      res.send({ token });
     });
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.query.email;
+      const user = await userCollection.findOne({ email: email });
+      if (user?.role !== 'admin') {
+        return res
+          .status(403)
+          .send({ error: true, message: 'unauthorized user' });
+      } else {
+        next();
+      }
+    };
+    const verifyInstructor = async (req, res, next) => {
+      const email = req.decoded.email;
+      const user = await userCollection.findOne({ email: email });
+      if (user?.role !== 'instructor') {
+        return res
+          .status(403)
+          .send({ error: true, message: 'unauthorized user' });
+      } else {
+        next();
+      }
+    };
+    const verifyUser = async (req, res, next) => {
+      const email = req.decoded.email;
+      const user = await userCollection.findOne({ email: email });
+      if (!user) {
+        return res
+          .status(403)
+          .send({ error: true, message: 'unauthorized user' });
+      } else {
+        next();
+      }
+    };
     /* Jwt end */
+
+    /* userCollection start*/
+    app.post('/users', async (req, res) => {
+      const user = req.body;
+      const email = req.body.email;
+      const userExist = await userCollection.findOne({ email: email });
+      if (userExist) {
+        return;
+      }
+      const countUser = await userCollection.countDocuments();
+  
+      req.body.count = countUser + 1;
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+    app.get('/users', verifyJwt, verifyAdmin, async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
+    app.get('/users/user/:email', async (req, res) => {
+      const email = req.params.email;
+      const result = await userCollection.findOne({ email: email });
+      if (result?.role === 'admin') {
+        return res.send('admin');
+      } else if (result?.role === 'instructor') {
+        return res.send('admin');
+      } else if (result?.role === 'student') {
+        return res.send('student');
+      }
+      res.status(403).send({ error: true, message: 'Access Forbidden' });
+    });
+    /* userCollection end*/
 
     await client.db('admin').command({ ping: 1 });
     console.log(
@@ -95,7 +130,7 @@ async function run() {
 run().catch(console.dir);
 
 app.get('/', (req, res) => {
-  console.log('pencil perfectionist is running on ', port);
+  res.send('pencil perfectionist is running on ');
 });
 app.listen(port, () => {
   console.log(port);
