@@ -10,7 +10,7 @@ require('dotenv').config();
 app.use(cors());
 app.use(express.json());
 const verifyJwt = (req, res, next) => {
-  const authorization = req.headers.authorization;
+  const authorization = req?.headers?.authorization;
   !authorization &&
     res.status(401).send({ error: true, message: 'unauthorized user' });
   const token = authorization.split(' ')[1];
@@ -126,14 +126,13 @@ async function run() {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
-    app.get('/users/user/:email', async (req, res) => {
+    app.get('/users/user/:email', verifyJwt, async (req, res) => {
       const email = req.params.email;
-
       const result = await userCollection.findOne({ email: email });
       if (result?.role === 'admin') {
         return res.send('admin');
       } else if (result?.role === 'instructor') {
-        return res.send('admin');
+        return res.send('instructor');
       } else if (result?.role === 'student') {
         return res.send('student');
       }
@@ -149,6 +148,34 @@ async function run() {
         return res.status(403).send({ error: true, message: '' });
       }
       const result = await classCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.patch(
+      '/allUser/updateStatus/:id',
+      verifyJwt,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const status = req.body.status;
+        const query = { _id: new ObjectId(id) };
+        const updateStatus = {
+          $set: {
+            status: status,
+          },
+        };
+
+        const request = await classCollection.updateOne(query, {
+          $unset: { request: 1 },
+        });
+        const result = await classCollection.updateOne(query, updateStatus);
+        res.send(result);
+      }
+    );
+    app.delete('/allUser/delete/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await classCollection.deleteOne(query);
       res.send(result);
     });
     /* Class collection end */
