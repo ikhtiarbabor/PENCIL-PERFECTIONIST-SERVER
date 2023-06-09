@@ -41,6 +41,9 @@ async function run() {
     const userCollection = client
       .db('pencilPerfectionistDB')
       .collection('users');
+    const classCollection = client
+      .db('pencilPerfectionistDB')
+      .collection('classes');
     /* Jwt start */
     app.post('/jwt', (req, res) => {
       const query = req.body;
@@ -108,9 +111,7 @@ async function run() {
       verifyAdmin,
       async (req, res) => {
         const id = req.params.id;
-        console.log(id);
         const role = req.body.role;
-        console.log(role);
         const query = { _id: new ObjectId(id) };
         const updateRole = {
           $set: {
@@ -139,6 +140,18 @@ async function run() {
       res.status(403).send({ error: true, message: 'Access Forbidden' });
     });
     /* userCollection end*/
+
+    /* Class collection start */
+    app.get('/allClasses/:email', verifyJwt, verifyAdmin, async (req, res) => {
+      const givenEmail = req.params.email;
+      const email = givenEmail === req.decoded.query.email;
+      if (!email) {
+        return res.status(403).send({ error: true, message: '' });
+      }
+      const result = await classCollection.find().toArray();
+      res.send(result);
+    });
+    /* Class collection end */
 
     await client.db('admin').command({ ping: 1 });
     console.log(
