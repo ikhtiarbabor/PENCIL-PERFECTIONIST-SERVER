@@ -68,7 +68,7 @@ async function run() {
       }
     };
     const verifyInstructor = async (req, res, next) => {
-      const email = req.decoded.email;
+      const email = req?.decoded?.query?.email;
       const user = await userCollection.findOne({ email: email });
       if (user?.role !== 'instructor') {
         return res
@@ -138,6 +138,7 @@ async function run() {
       }
       res.status(403).send({ error: true, message: 'Access Forbidden' });
     });
+
     /* userCollection end*/
 
     /* Class collection start */
@@ -152,7 +153,7 @@ async function run() {
     });
 
     app.patch(
-      '/allUser/updateStatus/:id',
+      '/allClasses/updateStatus/:id',
       verifyJwt,
       verifyAdmin,
       async (req, res) => {
@@ -165,19 +166,50 @@ async function run() {
           },
         };
 
-        const request = await classCollection.updateOne(query, {
+        await classCollection.updateOne(query, {
           $unset: { request: 1 },
         });
         const result = await classCollection.updateOne(query, updateStatus);
         res.send(result);
       }
     );
-    app.delete('/allUser/delete/:id', async (req, res) => {
+    app.delete('/allClasses/delete/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await classCollection.deleteOne(query);
       res.send(result);
     });
+    app.post(
+      '/adClass/instructor',
+      verifyJwt,
+      verifyInstructor,
+      async (req, res) => {
+        const newClass = req.body;
+        req.body.totalEnrolled = 0;
+        req.body.totalEarn = 0;
+        const classCount = await classCollection.estimatedDocumentCount();
+        req.body.count = classCount + 1;
+        const result = await classCollection.insertOne(newClass);
+        res.send(result);
+      }
+    );
+    app.get(
+      '/classes/instructorClasses/:email',
+      verifyJwt,
+      verifyInstructor,
+      async (req, res) => {
+        const email = req.params.email;
+        const decodedEmail = req?.decoded?.query?.email;
+        if (email !== decodedEmail) {
+          return res.status(403).send({ error: true, message: 'Forbidden' });
+        }
+        const result = await classCollection
+          .find({ instructor_mail: email })
+          .sort({ count: -1 })
+          .toArray();
+        res.send(result);
+      }
+    );
     /* Class collection end */
 
     await client.db('admin').command({ ping: 1 });
