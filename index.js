@@ -44,6 +44,9 @@ async function run() {
     const classCollection = client
       .db('pencilPerfectionistDB')
       .collection('classes');
+    const bookedCollection = client
+      .db('pencilPerfectionistDB')
+      .collection('booked');
     /* Jwt start */
     app.post('/jwt', (req, res) => {
       const query = req.body;
@@ -79,7 +82,7 @@ async function run() {
       }
     };
     const verifyUser = async (req, res, next) => {
-      const email = req.decoded.email;
+      const email = req?.decoded?.query?.email;
       const user = await userCollection.findOne({ email: email });
       if (!user) {
         return res
@@ -138,17 +141,24 @@ async function run() {
       }
       res.status(403).send({ error: true, message: 'Access Forbidden' });
     });
-
     /* userCollection end*/
 
     /* Class collection start */
+    app.get('/classes/popularClasses', async (req, res) => {
+      const result = await classCollection
+        .find({ status: 'approved' })
+        .limit(6)
+        .sort({ totalEnrolled: -1 })
+        .toArray();
+      res.send(result);
+    });
     app.get('/allClasses/:email', verifyJwt, verifyAdmin, async (req, res) => {
       const givenEmail = req.params.email;
       const email = givenEmail === req.decoded.query.email;
       if (!email) {
         return res.status(403).send({ error: true, message: '' });
       }
-      const result = await classCollection.find().toArray();
+      const result = await classCollection.find().sort({ count: -1 }).toArray();
       res.send(result);
     });
 
@@ -163,12 +173,9 @@ async function run() {
         const updateStatus = {
           $set: {
             status: status,
+            request: 'none',
           },
         };
-
-        await classCollection.updateOne(query, {
-          $unset: { request: 1 },
-        });
         const result = await classCollection.updateOne(query, updateStatus);
         res.send(result);
       }
@@ -187,6 +194,7 @@ async function run() {
         const newClass = req.body;
         req.body.totalEnrolled = 0;
         req.body.totalEarn = 0;
+        req.request = 'none';
         const classCount = await classCollection.estimatedDocumentCount();
         req.body.count = classCount + 1;
         const result = await classCollection.insertOne(newClass);
@@ -211,6 +219,14 @@ async function run() {
       }
     );
     /* Class collection end */
+
+    /* booked Collection start */
+    app.post('/classes/booked', verifyJwt,verifyUser, async (req, res) => {
+      const query = req.body;
+      const result = await bookedCollection.insertOne(query);
+      res.send(result);
+    });
+    /* booked Collection end */
 
     await client.db('admin').command({ ping: 1 });
     console.log(
