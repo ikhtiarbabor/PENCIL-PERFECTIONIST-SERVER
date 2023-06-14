@@ -5,6 +5,7 @@ const port = process.env.PORT || 5000;
 const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY);
 
 // middleware
 app.use(cors());
@@ -47,6 +48,12 @@ async function run() {
     const bookedCollection = client
       .db('pencilPerfectionistDB')
       .collection('booked');
+    const historyCollection = client
+      .db('pencilPerfectionistDB')
+      .collection('paymentHistory');
+    const enrolledCollection = client
+      .db('pencilPerfectionistDB')
+      .collection('enrolled');
     /* Jwt start */
     app.post('/jwt', (req, res) => {
       const query = req.body;
@@ -133,13 +140,25 @@ async function run() {
       const email = req.params.email;
       const result = await userCollection.findOne({ email: email });
       if (result?.role === 'admin') {
-        return res.send('admin');
+        return res.send({ role: 'admin', _id: result?._id });
       } else if (result?.role === 'instructor') {
-        return res.send('instructor');
+        return res.send({ role: 'instructor', _id: result?._id });
       } else if (result?.role === 'student') {
-        return res.send('student');
+        return res.send({ role: 'student', _id: result?._id });
       }
       res.status(403).send({ error: true, message: 'Access Forbidden' });
+    });
+    //TODO: USER PATCH DOESN'T WORK
+    app.patch('users/user/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: {
+          request: 'instructor',
+        },
+      };
+      const result = await userCollection.updateOne(query, update);
+      res.send(result);
     });
     /* userCollection end*/
 
@@ -152,12 +171,7 @@ async function run() {
         .toArray();
       res.send(result);
     });
-    app.get('/allClasses/:email', verifyJwt, verifyAdmin, async (req, res) => {
-      const givenEmail = req.params.email;
-      const email = givenEmail === req.decoded.query.email;
-      if (!email) {
-        return res.status(403).send({ error: true, message: '' });
-      }
+    app.get('/allClasses', async (req, res) => {
       const result = await classCollection.find().sort({ count: -1 }).toArray();
       res.send(result);
     });
@@ -221,13 +235,79 @@ async function run() {
     /* Class collection end */
 
     /* booked Collection start */
-    app.post('/classes/booked', verifyJwt,verifyUser, async (req, res) => {
+    app.post('/classes/booked', verifyJwt, verifyUser, async (req, res) => {
       const query = req.body;
+      const count = await bookedCollection.estimatedDocumentCount();
+      req.body.count = count + 1;
       const result = await bookedCollection.insertOne(query);
       res.send(result);
     });
-    /* booked Collection end */
+    app.get(
+      '/classes/booked/:email',
+      verifyJwt,
+      verifyUser,
+      async (req, res) => {
+        const email = req.params.email;
+        const decodedEmail = req?.decoded?.query?.email;
+        if (email !== decodedEmail) {
+          return res.status(403).send({ error: true, message: 'Forbidden' });
+        }
+        const query = { email: email };
+        const result = await bookedCollection
+          .find(query)
+          .sort({ count: -1 })
+          .toArray();
+        res.send(result);
+      }
+    );
+    app.delete(
+      '/classes/deleteBooked/:id',
+      verifyJwt,
+      verifyUser,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await bookedCollection.deleteOne(query);
+        res.send(result);
+      }
+    );
 
+    /* booked Collection end */
+    /* stripe payment start */
+    app.post('/create-payment-intent', verifyJwt, async (req, res) => {
+      const { price } = req.body;
+      if (price <= 0) {
+        return res.send({});
+      }
+      const amount = parseInt(price * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: 'usd',
+        payment_method_types: ['card'],
+      });
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+    app.post('/enrolledMany', verifyJwt, async (req, res) => {
+      const data = req.body;
+      const result = await enrolledCollection.insertMany(data);
+      res.send(result);
+    });
+    app.delete('/deleteBookedClass/:email', verifyJwt, async (req, res) => {
+      const email = req.params.email;
+      const filter = { email: email };
+      const result = await bookedCollection.deleteMany(filter);
+
+      res.send(result);
+    });
+    app.post('/paymentHistory', verifyJwt, async (req, res) => {
+      const history = req.body;
+      const result = await historyCollection.insertOne(history);
+      res.send(result);
+    });
+
+    /* stripe payment end */
     await client.db('admin').command({ ping: 1 });
     console.log(
       'Pinged your deployment. You successfully connected to MongoDB!'
