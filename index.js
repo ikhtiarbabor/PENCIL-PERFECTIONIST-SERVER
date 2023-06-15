@@ -172,7 +172,10 @@ async function run() {
       res.send(result);
     });
     app.get('/allClasses', async (req, res) => {
-      const result = await classCollection.find().sort({ count: -1 }).toArray();
+      const result = await classCollection
+        .find({ status: 'approved' })
+        .sort({ count: -1 })
+        .toArray();
       res.send(result);
     });
 
@@ -308,6 +311,15 @@ async function run() {
     });
 
     /* stripe payment end */
+
+    /* Enrolled Classes start  */
+
+    app.get('/classes/enrolled/:email', verifyJwt, async (req, res) => {
+      const email = req.params.email;
+      const result = await enrolledCollection.find({ email: email }).toArray();
+      res.send(result);
+    });
+    /* Enrolled Classes end */
     await client.db('admin').command({ ping: 1 });
     console.log(
       'Pinged your deployment. You successfully connected to MongoDB!'
