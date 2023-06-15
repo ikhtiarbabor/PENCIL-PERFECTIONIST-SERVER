@@ -133,7 +133,7 @@ async function run() {
       }
     );
     app.get('/users', verifyJwt, verifyAdmin, async (req, res) => {
-      const result = await userCollection.find().toArray();
+      const result = await userCollection.find().sort({ count: -1 }).toArray();
       res.send(result);
     });
     app.get('/users/user/:email', verifyJwt, async (req, res) => {
@@ -160,6 +160,14 @@ async function run() {
       const result = await userCollection.updateOne(query, update);
       res.send(result);
     });
+
+    app.get('/instructors', async (req, res) => {
+      const result = await userCollection
+        .find({ role: 'instructor' })
+        .sort({ count: -1 })
+        .toArray();
+      res.send(result);
+    });
     /* userCollection end*/
 
     /* Class collection start */
@@ -171,6 +179,11 @@ async function run() {
         .toArray();
       res.send(result);
     });
+    app.get('/class/:id', async (req, res) => {
+      const id = req.params.id;
+      const result = await classCollection.findOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
     app.get('/allClasses', async (req, res) => {
       const result = await classCollection
         .find({ status: 'approved' })
@@ -178,7 +191,10 @@ async function run() {
         .toArray();
       res.send(result);
     });
-
+    app.get('/allClasses/admin', verifyJwt, verifyAdmin, async (req, res) => {
+      const result = await classCollection.find().sort({ count: -1 }).toArray();
+      res.send(result);
+    });
     app.patch(
       '/allClasses/updateStatus/:id',
       verifyJwt,
